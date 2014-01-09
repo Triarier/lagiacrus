@@ -12,6 +12,19 @@ void (**nfc_what_happens_if)(nfc_reader* x) = NULL;
 int what_happens_len;
 int what_happens_max_len;
 
+int nfc_set_cmd(nfc_reader* x,char* str){
+ 
+  int str_len = strlen(str);
+  int i = 0;
+  if(!str_len) 
+    return 1;
+  for(;i<str_len;i++) 
+    x->command[i]=(uint8_t) str[i];
+  x->command_len = i;
+  return 0;
+}
+
+
 void dance_the_expanding_dance(){
 
   int i;
@@ -56,16 +69,19 @@ fprintf(stdout,"%s\n",name);
   tconfig.c_cc[VMIN] = 5;
   /* Tconfig setup */ 
   tconfig.c_iflag &= ~(IGNBRK|ISTRIP|IXON);
-  tconfig.c_lflag &= ~(ECHO | ECHONL | ICANON | IEXTEN | ISIG);
+/*  tconfig.c_lflag &= ~(ECHO | ECHONL | ICANON | IEXTEN | ISIG); */
+  tconfig.c_lflag &= ~(ECHO | ECHONL | ICANON | IEXTEN | ISIG); 
+  tconfig.c_cflag &= ~(CSIZE | PARENB);
   tconfig.c_cflag |= CS8;
   tconfig.c_oflag &= ~(OPOST); 
   if(cfsetispeed(&tconfig, B115200) < 0 || cfsetospeed(&tconfig, B115200) < 0) 
     fprintf(stderr,"ERROR %s:%d\n",__FILE__,__LINE__);
   if(tcsetattr(x.fh, TCSANOW, &tconfig) < 0)
     fprintf(stderr,"ERROR %s:%d\n",__FILE__,__LINE__);
+  
   x.reddit = (unsigned char*) malloc(sizeof(unsigned char)*100);
   x.reddit_len = 0;
-
+  x.command_len = 0;
   xptr = malloc(sizeof(nfc_reader)*1);
   *xptr = x;
   return xptr;
@@ -73,10 +89,10 @@ fprintf(stdout,"%s\n",name);
 void* nfc_reader_do(void* y){
     nfc_reader* x= y;
     int write_pos = 0;
-    int len = strlen((x->command));
     int i;
     int j=0;
     int limit = -1;
+    int len = x->command_len;
     int read_bytes;
     int b_read =0;
     unsigned char bcc = 0;
@@ -84,22 +100,10 @@ void* nfc_reader_do(void* y){
     fd_set set;
     int written_bytes;
     struct timeval timeout;
-#if 0    
-    struct termios tconfig;
-    tconfig.c_cc[VTIME] = 3;
-    tconfig.c_cc[VMIN] = 5;
-    /* Tconfig setup */ 
-    tconfig.c_iflag &= ~(IGNBRK|ISTRIP|IXON);
-    tconfig.c_lflag &= ~(ECHO | ECHONL | ICANON | IEXTEN | ISIG);
-    tconfig.c_cflag |= CS8;
-    tconfig.c_oflag &= ~(OPOST); 
-    if(cfsetispeed(&tconfig, B115200) < 0 || cfsetospeed(&tconfig, B115200) < 0) 
-      fprintf(stderr,"ERROR %s:%d\n",__FILE__,__LINE__);
-    if(tcsetattr(x->fh, TCSANOW, &tconfig) < 0)
-      fprintf(stderr,"ERROR %s:%d\n",__FILE__,__LINE__);
-#endif
     timeout.tv_sec=1;
     timeout.tv_usec=0;
+    for(i=0;i<len;i++)
+      fprintf(stderr,"%d\n",(x->command)[i]);
     for(i=0;i<len;i++){
       if(isalpha((x->command)[i])){
         ucmd[j++] = (x->command)[i];
@@ -125,10 +129,12 @@ void* nfc_reader_do(void* y){
     x->write_puffer[write_pos++] = ustrlen(ucmd);
     for(i=0;i<ustrlen(ucmd);i++)
       x->write_puffer[write_pos++] = ucmd[i];
-    for(i=1;i<len+3;i++) 
+    for(i=1;i<(len)+3;i++) 
       bcc ^= x->write_puffer[i];
     x->write_puffer[write_pos++] = bcc;
     x->write_puffer[write_pos++] = 3;
+    for(i=0;i<write_pos;i++)
+      fprintf(stderr,"written: %d\n",(x->write_puffer)[i]);
     written_bytes = write(x->fh,x->write_puffer,write_pos);
     if(written_bytes != write_pos){
       fprintf(stderr,"Error while writing\n");
@@ -159,6 +165,11 @@ void* nfc_reader_do(void* y){
         }
       }
       else{
+        int ii= 0;
+        fprintf(stderr,"Read Bytes: %d\n",b_read);
+        fprintf(stderr,"Expected: %d\n",limit);
+        for(ii=0;ii<b_read;ii++)
+          fprintf(stderr,"Read: %d\n",(x->reddit)[ii]);
         fprintf(stdout,"Could not catch the correct length of the answer\n");
         break;
       }
@@ -287,6 +298,3 @@ int ustrlen(unsigned char* str){
 
 }
 
-void set_cmd(nfc_reader *x,char * y){
-  strcpy(&((x->command)[0]),y);
-}

@@ -2,6 +2,7 @@
 #define NFCLIB_H
 
 #include <pthread.h>
+#include <stdint.h>
 
 struct nfc_struct;
 
@@ -9,11 +10,12 @@ typedef struct nfc_struct{
   char* nfc_port;  /* Port of NFC_Reader, e.g '/dev/ttyUSB0' , gets initialize with nfc_reader_init(); */
   int fh;
   pthread_t polling;
-  unsigned char read_puffer[100];
-  unsigned char write_puffer[100];
-  unsigned char* reddit;
+  uint8_t read_puffer[100];
+  uint8_t write_puffer[100];
+  uint8_t* reddit;
   int reddit_len;
-  char command[100];
+  uint8_t command[100];
+  int command_len;
 } nfc_reader ;
 
 
@@ -28,9 +30,6 @@ void byebye(char *str);
 void* nfc_reader_do(void* y);
 void set_cmd(nfc_reader *x,char * y);
 int ustrlen(unsigned char* str);
-/*
-unsigned char* getserial(unsigned char* yoshi);
-void strtouchar(char* str,unsigned char* uchar);
-*/
+int nfc_set_cmd(nfc_reader* x,char* str);
 
 #endif /* NFCLIB_H */
