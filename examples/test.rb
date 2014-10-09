@@ -1,16 +1,14 @@
 #!/usr/bin/ruby
-require File.expand_path(File.dirname(__FILE__) + '/../lib/nfc')
+require 'nfc'
 require 'riddl/client'
 require 'json'
-
+require 'pp'
 
 reader = NFC::Reader.new
-#reader.command 'x'
-#reader.command 'b'
 reader.poll do |result|
-  data = { 'serialnr' => reader.serialnr, 'info' => 'bla' }
+  data = { 'serialnr' => reader.serialnr, 'info' => result.hex }
   p result
   p result.hex
   client = Riddl::Client.new( 'http://leonardo.wst.univie.ac.at:9309/triggers')
-  client.post Riddl::Parameter::Complex.new "nfc_tag", "application/json", JSON.generate(data)
+  client.post Riddl::Parameter::Complex.new "list", "application/json", JSON.generate(data)
 end  

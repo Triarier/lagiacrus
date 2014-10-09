@@ -8,6 +8,9 @@
 #include <ctype.h>
 #include "nfclib.h"
 
+#define DEBUG 0
+#define COMMAND 0
+#define DATA 1
 void (**nfc_what_happens_if)(nfc_reader* x) = NULL;
 int what_happens_len;
 int what_happens_max_len;
@@ -57,7 +60,7 @@ void* nfc_reader_on_tag(nfc_reader* x,void (*y)(nfc_reader*)){
 /* # }}}*/
 
 /* nfc_reader_init # {{{ */
-nfc_reader* nfc_reader_init(const char* name, int mem_len) {
+nfc_reader* nfc_reader_init(const char* name) {
   nfc_reader* xptr;
   nfc_reader x;
   int len = strlen(name);
@@ -91,10 +94,6 @@ nfc_reader* nfc_reader_init(const char* name, int mem_len) {
   x.what_happens_len = 0;
   x.what_happens_max_len = 0;
   x.nfc_what_happens_if=NULL;
-  x.tag_mem_max_len = mem_len;
-  x.tag_mem_len = 0;
-  x.tag_mem_block_len = 4 ;
-  x.tag_mem = (unsigned char*) malloc(sizeof(unsigned char)*(mem_len*((x.tag_mem_block_len)+1))) ;
   xptr = malloc(sizeof(nfc_reader)*1);
   *xptr = x;
   return xptr;
@@ -106,104 +105,88 @@ void* nfc_reader_do(void* y){
     nfc_reader* x= y;
     int write_pos = 0;
     int i;
+    int command_modus = COMMAND;
     int j=0;
     int limit = -1;
     int len = x->command_len;
     int read_bytes;
     int b_read =0;
-    int tries = 0;
-    int max_tries = 2;
     unsigned char bcc = 0;
-    unsigned char ucmd [50];
     fd_set set;
     int written_bytes;
     struct timeval timeout;
     timeout.tv_sec=1;
     timeout.tv_usec=0;
-    for(i=0;i<len;i++){
-      if(isalpha((x->command)[i])){
-        ucmd[j++] = (x->command)[i];
-      }
-      if(isdigit((x->command)[i])){
-        int temp = (x->command)[i++] - '0';
-        while(i<len && isdigit((x->command)[i])){
-          temp *= 10;
-          temp += (x->command)[i++] - '0';
-        }
-        if(temp>255) 
-          byebye("Adresse zu groß");
-        ucmd[j++] = temp;
-        if(i==len)
-          break;
-      }
-    }
+    uint8_t* cmd_ptr = x->command;
     /*CLEAR */
     written_bytes = write(x->fh,"\0",1);
-    ucmd[j] = '\0';
     x->write_puffer[write_pos++] = 2;
     x->write_puffer[write_pos++] = 255;
-    x->write_puffer[write_pos++] = ustrlen(ucmd);
-    for(i=0;i<ustrlen(ucmd);i++)
-      x->write_puffer[write_pos++] = ucmd[i];
-    for(i=1;i<(len)+3;i++) 
+    x->write_puffer[write_pos++] = len;
+    for(i=0;i<len;i++){
+      if(isspace(cmd_ptr[i])){
+        command_modus=DATA;
+        (x->write_puffer)[2]--;
+        continue;
+      }
+      if(command_modus==COMMAND)
+        x->write_puffer[write_pos++] = cmd_ptr[i];
+      else{
+        char temp[3];
+        temp[0]=cmd_ptr[i++];
+        temp[1]=cmd_ptr[i];
+        temp[2]='\0';
+        (x->write_puffer)[2]--;
+        long digi = strtol(temp,NULL,16); 
+        x->write_puffer[write_pos++] = digi;
+      }
+    }
+    for(i=1;i<((x->write_puffer)[2])+3;i++) 
       bcc ^= x->write_puffer[i];
     x->write_puffer[write_pos++] = bcc;
     x->write_puffer[write_pos++] = 3;
-/*    for(i=0;i<write_pos;i++)
+#if DEBUG
+    for(i=0;i<write_pos;i++)
       fprintf(stderr,"written: %d\n",(x->write_puffer)[i]);
-*/    
-    
-    for(tries=0;tries<max_tries;){
-      written_bytes = write(x->fh,x->write_puffer,write_pos);
-      if(written_bytes != write_pos){
-        fprintf(stderr,"Error while writing\n");
-        return y;
-      }
-      j=0;
-      while(1){
-        /* INITIALIZE FD READ SET */
-        FD_ZERO (&set);
-        FD_SET (x->fh,&set);
-        
-        if(select(FD_SETSIZE,&set,NULL,NULL,&timeout)>0){
-          if((read_bytes=read(x->fh,x->read_puffer,37))>0){
-            for(i=0;i<read_bytes;i++,j++)
-              (x->reddit)[j] = (x->read_puffer)[i];
-            
-            if(j>2 && limit==-1) limit=(x->reddit)[2]+5;
-            b_read+=read_bytes;
-          }
-          if(b_read==limit) {
-            x->reddit_len = b_read;
-            tries=max_tries;
-            break;
-          }
-          if(limit!=-1 && b_read>limit){
-            /*
-            fprintf(stdout,"Error. Read too many bytes\n");
-            */
-            x->reddit_len = 0;
-            break;
-          }
-        }
-        else{
-  /*        
-          int ii= 0;
-          fprintf(stderr,"Read Bytes: %d\n",b_read);
-          fprintf(stderr,"Expected: %d\n",limit);
+#endif    
+    written_bytes = write(x->fh,x->write_puffer,write_pos);
+    if(written_bytes != write_pos){
+      fprintf(stderr,"Error while writing\n");
+      return y;
+    }
+    j=0;
+    while(1){
+      /* INITIALIZE FD READ SET */
+      FD_ZERO (&set);
+      FD_SET (x->fh,&set);
+      
+      if(select(FD_SETSIZE,&set,NULL,NULL,&timeout)>0){
+        if((read_bytes=read(x->fh,x->read_puffer,37))>0){
+          for(i=0;i<read_bytes;i++,j++)
+            (x->reddit)[j] = (x->read_puffer)[i];
           
-          for(ii=0;ii<b_read;ii++)
-            fprintf(stderr,"Read: %d\n",(x->reddit)[ii]);
-          fprintf(stdout,"Could not catch the correct length of the answer\n");
-  */
+          if(j>2 && limit==-1) limit=(x->reddit)[2]+5;
+          b_read+=read_bytes;
+        }
+        if(b_read==limit) {
+          x->reddit_len = b_read;
+          break;
+        }
+        if(limit!=-1 && b_read>limit){
+          /*
+          fprintf(stdout,"Error. Read too many bytes\n");
+          */
           x->reddit_len = 0;
           break;
         }
       }
-      tries++;
-      if(nfc_what_happens_if!=NULL)
-        nfc_what_happens_if[(0)](x);
+      else{
+        x->reddit_len = 0;
+        break;
+      }
     }
+    if(nfc_what_happens_if!=NULL)
+      nfc_what_happens_if[(0)](x);
     return y;  /*Bessere Returns; */
 }
 /*  # }}}*/
@@ -288,93 +271,6 @@ void* nfc_reader_read(void *y){
   }
 }
 /* # }}}*/
-/* # {{{  nfc_reader_read_mem */
-void nfc_reader_read_mem(nfc_reader* x){
-
-  int i,count;
-  unsigned char* tag_mems= x->tag_mem;
-  char str[10];
-  x->tag_mem[0] ='\0';
-  nfc_set_cmd(x,"s");
-  nfc_reader_do(x);
-  nfc_reader_do(x);
-  for(i=4;i<8;i++){
-/*  for(i=4;i<(x->tag_mem_max_len);i++){ */
-    x->reddit_len = 0;
-    while((x->reddit_len)==0){
-      sprintf(str,"r%d",i);
-      nfc_set_cmd(x,str);
-      nfc_reader_do(x);
-/*      
-      fprintf(stdout,"READ_MEM: %d\n",x->reddit_len);
-*/      
-      if((x->reddit_len)==(5+(x->tag_mem_block_len))){
-        int j;
-        int hex;
-        char test[9];
-        char temp[3];
-        char* ptemp = &(temp[0]);
-        char* p_test= &(test[0]);
-        if((x->reddit)[6] == 0) break;
-        for(j=3;j<((x->reddit_len)-2);j++){
-/*          fprintf(stdout,"%02x ",(x->reddit)[j]);
-*/
-          sprintf(ptemp,"%02x",(x->reddit)[j]);
-          if(j==3){
-            strcpy(p_test,ptemp);
-            if(i==4) strcpy((x->tag_mem),ptemp);
-            else strcat(tag_mems,ptemp);
-            tag_mems+=4;
-            *tag_mems='\0';
-            tag_mems++;
-          }
-          else{
-            strcat(p_test,ptemp);
-            strcat(tag_mems,ptemp);
-            tag_mems+=4;
-            *tag_mems='\0';
-            tag_mems++;
-          }
-        }
-/*        
-        hex = (int)strtol(p_test,NULL,16);
-        fprintf(stdout,"%s\n",p_test);
-        fprintf(stdout,"%d\n",hex);
-        fprintf(stdout,"\n");
-*/
-      }
-/*
-      if((x->nfc_what_happens_if)!=NULL){
-        for(count=0;count<(x->what_happens_len);count++)
-          (x->nfc_what_happens_if)[(count)](x);
-      }
-*/
-      if((x->reddit_len)==0 || (x->reddit_len)==6){
-        nfc_set_cmd(x,"s");
-        nfc_reader_do(x);
-        x->reddit_len = 0;
-      }
-    }
-    if((x->reddit)[6] == 0) break;
-
-  }
-  
-  for(i=0;i<(x->tag_mem_max_len);i+=((x->tag_mem_block_len)+1)){
-    if((x->tag_mem)[i]=='\0') break;
-/*
-    else {
-      fprintf(stdout,"String: %s",(x->tag_mem));
-      fprintf(stdout,"HUCH: %c \n",(x->tag_mem)[5]);
-      fprintf(stdout,"HUCH: %c \n",(x->tag_mem)[10]);
-      fprintf(stdout,"\n");
-    }
-*/
-  }
-  sleep(1);
-  nfc_set_cmd(x,"dp");
-  nfc_reader_do(x);
-}
-/* # }}}  */
 
 /* nfc_reader_1_read # {{{ */
 void* nfc_reader_1_read(void *y){
@@ -442,8 +338,6 @@ int nfc_reader_destroy(nfc_reader* x){
       free(x->nfc_port);
     if((x->nfc_what_happens_if) != NULL)
       free((x->nfc_what_happens_if));
-    if((x->tag_mem)!=NULL)
-      free(x->tag_mem);
     free(x);
   }
   return 0;

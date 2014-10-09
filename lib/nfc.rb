@@ -6,7 +6,7 @@ module NFC
     ffi_lib ::File.dirname(__FILE__) + '/nfclib.so'
     callback :on_tag_callback, [:pointer], :void
     attach_function :nfc_reader_on_tag, [:pointer,:on_tag_callback], :pointer
-    attach_function :nfc_reader_init, [:string,:int], :pointer
+    attach_function :nfc_reader_init, [:string], :pointer
     attach_function :nfc_reader_poll, [:pointer], :int
     attach_function :nfc_reader_stop_poll, [:pointer], :int
     attach_function :nfc_reader_destroy, [:pointer], :int
@@ -43,28 +43,48 @@ module NFC
     end
 
     def hex
-      @res.map{|e| e.to_s(16) }
+    #  @res.map{|e| e.to_s(16) }
+      @res.map{|e| "%02x" % e }.join
     end
     def dec
       @res
     end
+    def zero #{{{
+      checker = true
+      @res.each do |x|
+        if x!=0
+          checker = false
+        end
+      end
+      checker
+    end #}}}
+
+    def high #{{{
+      checker = true
+      @res.each do |x|
+        if x!=255
+          checker = false
+        end
+      end
+      checker
+    end #}}}
+
+    @res
   end #}}}
 
   class Reader
     attr_reader :reader
-    attr_accessor :serialnr 
-    def initialize(tty = "/dev/ttyUSB0",mem_len=36) #{{{
-      @reader = NFC.nfc_reader_init(tty,mem_len)
+    attr_reader :serialnr 
+    def initialize(tty = "/dev/ttyUSB0") #{{{
+      @reader = NFC.nfc_reader_init(tty)
       @thread = nil
       @serialnr = nil
       command('x')
 
-      begin
-        @serialnr = command('b')
-      end while @serialnr == nil
-      p "SERIAL"
-      p @serialnr
-      p '-' * 24
+ #     begin
+ #       @serialnr = command('b')
+ #     end while @serialnr == nil
+ #     @serialnr = @serialnr.unpack("C*").map{|e| "%02x" % e}.join
       Signal::trap("INT") do
         puts 'stopping...'
         stop_poll
@@ -76,7 +96,12 @@ module NFC
       obj = Struct.new(@reader)
       NFC.nfc_set_cmd(@reader,cmd)
       NFC.nfc_reader_do(@reader)
-      obj[:reddit].read_string(obj[:reddit_len])[3..-3] 
+      if (obj[:reddit].read_string(obj[:reddit_len])[3..-3]== nil)
+        temp = nil
+      else
+        temp=Result.new(obj[:reddit].read_string(obj[:reddit_len])[3..-3])
+      end
+      temp
     end #}}}
 
     def command_print(cmd) #{{{
