@@ -11,4 +11,5 @@ Gem::Specification.new do |s|
   s.require_paths = ['lib']
   s.extensions = Dir['ext/extconf.rb']
   s.homepage = 'https://github.com/Triarier/lagiacrus'
+  s.add_runtime_dependency 'ffi', '>=1.9.10', '~>1.9'
 end
