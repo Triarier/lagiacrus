@@ -1,6 +1,6 @@
 Gem::Specification.new do |s|
   s.name = 'nfclib'
-  s.version = '0.0.136'
+  s.version = '0.0.140'
   s.date = '2014-08-05'
   s.summary ="NFC-Reader Library."
   s.description ="Executes command and gets results in c, everthing else ruby-yo"

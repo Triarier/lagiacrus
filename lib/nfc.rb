@@ -3,7 +3,7 @@ require 'ffi'
 module NFC
   # FFI #{{{
     extend FFI::Library
-    ffi_lib ::File.dirname(__FILE__) + '/nfclib.so'
+    ffi_lib ::File.dirname(__FILE__) + '../ext/nfclib.so'
     callback :on_tag_callback, [:pointer], :void
     attach_function :nfc_reader_on_tag, [:pointer,:on_tag_callback], :pointer
     attach_function :nfc_reader_init, [:string], :pointer
@@ -44,10 +44,10 @@ module NFC
 
     def hex
     #  @res.map{|e| e.to_s(16) }
-      @res.map{|e| "%02x" % e }.join
+      @res.map{|e| "%02x" % e }.join(' ')
     end
     def dec
-      @res
+      @res.join(' ')
     end
     def zero #{{{
       checker = true
@@ -94,12 +94,15 @@ module NFC
 
     def command( cmd) #{{{
       obj = Struct.new(@reader)
-      NFC.nfc_set_cmd(@reader,cmd)
-      NFC.nfc_reader_do(@reader)
-      if (obj[:reddit].read_string(obj[:reddit_len])[3..-3]== nil)
-        temp = nil
-      else
-        temp=Result.new(obj[:reddit].read_string(obj[:reddit_len])[3..-3])
+      temp = nil
+      while temp.nil? do
+        NFC.nfc_set_cmd(@reader,cmd)
+        NFC.nfc_reader_do(@reader)
+        if (obj[:reddit].read_string(obj[:reddit_len])[3..-3]== nil)
+          temp = nil
+        else
+          temp=Result.new(obj[:reddit].read_string(obj[:reddit_len])[3..-3])
+        end
       end
       temp
     end #}}}
