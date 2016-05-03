@@ -3,7 +3,7 @@ require 'ffi'
 module NFC
   # FFI #{{{
     extend FFI::Library
-    ffi_lib ::File.dirname(__FILE__) + '../ext/nfclib.so'
+    ffi_lib ::File.dirname(__FILE__) + '/../ext/nfclib.so'
     callback :on_tag_callback, [:pointer], :void
     attach_function :nfc_reader_on_tag, [:pointer,:on_tag_callback], :pointer
     attach_function :nfc_reader_init, [:string], :pointer
