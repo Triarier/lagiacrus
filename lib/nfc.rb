@@ -103,6 +103,7 @@ module NFC
         else
           temp=Result.new(obj[:reddit].read_string(obj[:reddit_len])[3..-3])
         end
+        temp = true if cmd=='x'
       end
       temp
     end #}}}
