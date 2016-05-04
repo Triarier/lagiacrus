@@ -42,6 +42,9 @@ module NFC
       @res = res.unpack("C*") 
     end
 
+    def char
+      @res.map{|e| e.chr}.join(' ')
+    end
     def hex
     #  @res.map{|e| e.to_s(16) }
       @res.map{|e| "%02x" % e }.join(' ')
