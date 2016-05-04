@@ -90,8 +90,10 @@ module NFC
  #     @serialnr = @serialnr.unpack("C*").map{|e| "%02x" % e}.join
       Signal::trap("INT") do
         puts 'stopping...'
-        stop_poll
-        @thread.kill
+        if @thread
+          stop_poll
+          @thread.kill
+        end
       end
     end #}}} 
 
